@@ -1,0 +1,239 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<title></title>
+<script src="levenshtein.js"></script>
+<style>
+body {
+	font-family: "Trebuchet MS", Arial, Helvetica, sans-serif;
+}
+#__result > span {
+	display: inline-block;
+}
+</style>
+</head>
+<body>
+Levenshtein distance<br><br>
+Text 1 / dest String<br>
+<textarea id="__text1" cols="50" rows="7"></textarea><br>
+<br>
+Text 2 / From string<br>
+<textarea id="__text2" cols="50" rows="7"></textarea><br>
+<br>
+Result
+<div id="__result"></div>
+<script>
+
+__text1.oninput = __text2.oninput = function(e){
+	
+	var fromStr = __text2.value;
+	var destStr = __text1.value;
+	var d = getDetailLevenshtein(fromStr, destStr);
+	var l = d.l;
+	
+	var innerHTML = "";
+	
+	//===
+	
+	var a = d.operations;
+	
+	var index = 0;
+	var op;
+	while(op = a.splice(0,1)[0]){
+		innerHTML += fromStr.slice(index, op.index);
+		if (op.operation == "delete"){
+			innerHTML += "<span style=\"background-color: #ffafbc;text-decoration: line-through;\">"
+			 + fromStr.charAt(op.index) + "</span>";
+			 
+			index = op.index + 1;
+		} else if (op.operation == "insert"){
+			innerHTML += "<span><span style=\"background-color: #90ee90;\">"
+			 + op.char + "</span><br><span>&#8203;</span></span>";
+			 
+			index = op.index;
+		} else { //substitute
+			innerHTML += "<span><span style=\"background-color: #90ee90;\">"
+			 + op.char + "</span><br>" 
+			 + "<span style=\"background-color: #ffafbc;text-decoration: underline;\">"
+			 + fromStr.charAt(op.index) + "</span></span>";
+			 
+			index = op.index + 1;
+		}
+		
+	}
+	
+	
+	innerHTML += fromStr.slice(index);
+	
+	//===
+	
+	innerHTML += "<br><br><pre>"
+	+ "distance:           " + d.distance + "\n"
+	+ "insertion count:    " + d.insertionCount + "\n"
+	+ "deletion count:     " + d.deletionCount + "\n"
+	+ "substitution count: " + d.substitutionCount + "\n"
+	+ l.toString() + "</pre>"
+	
+	__result.innerHTML = innerHTML;
+	
+}
+
+
+function getDetailLevenshtein(fromStr, destStr){
+	//return {
+	//	l: Levenshtein instance
+	//	operations: [{
+	//		index        index of from str
+	//		operation    delete|insert|substitute  insert mean insert before
+	//		char         character for insert or substitute, otherwise the deleted cahr
+	//	} , ...]
+	//	distance
+	//	insertionCount
+	//	deletionCount
+	//	substitutionCount
+	//	fromStr
+	//	destStr
+	//}
+	
+		// operation can be delete|insert|substitute
+	var l = new Levenshtein(fromStr, destStr);
+	
+	var a = [];
+	var o = {
+		l: l,
+		operations: a,
+		distance: l.distance,
+		insertionCount: 0,
+		deletionCount: 0,
+		substitutionCount: 0,
+		fromStr: fromStr,
+		destStr: destStr
+	}
+	
+	if(l == 0){
+		return o;
+	}
+	
+	var matrix = l.getMatrix();
+	if(matrix.length == 0){
+		if(fromStr == ''){
+			o.insertionCount = destStr.length;
+			fn1(a, "insert", destStr);
+			return o;
+		} else if(destStr == ''){
+			o.deletionCount = fromStr.length;
+			fn1(a, "delete", fromStr);
+			return o;
+		}
+		
+		throw new Error("unknown");
+	}
+	
+	function fn1(a, operation, str){
+		for(var i = 0; i < str.length; i++){
+			a.push({
+				index: i,
+				operation: operation,
+				char: str.charAt(i)
+			});
+		}
+	}
+	
+	//==== MAIN CASES
+	// val of cell(x,y) = matrix[y][x]
+	// w = matrix[0].length, h = matrix.length
+	var w = matrix[0].length;
+	var h = matrix.length;
+	
+	var x = w-1;
+	var y = h-1;
+	
+	while(x != 0 && y != 0){
+		var leftVal = cellVal(x-1, y);
+		var upperLeftVal = cellVal(x-1, y-1);
+		var upperVal = cellVal(x, y-1);
+		var currentVal = cellVal(x, y);
+		
+		if(leftVal != null && leftVal < currentVal
+				&& leftVal <= upperLeftVal && leftVal <= upperVal){ //step 2, delete
+			a.unshift({
+				index: x-1,
+				operation: "delete",
+				char: fromStr.charAt(x-1)
+			});
+			o.deletionCount++;
+			x--;
+		} else if (upperVal != null && upperVal < currentVal
+				&& upperVal <= upperLeftVal && upperVal <= leftVal){ //step 3, insert
+			a.unshift({
+				index: x, //0 if beginning
+				operation: "insert",
+				char: destStr.charAt(y-1)
+			});
+			o.insertionCount++;
+			y--;
+		} else { //step 4
+			if(upperLeftVal == currentVal){ //setp 5, no changes
+				
+			} else { //step 6, substitute
+				a.unshift({
+					index: x-1,
+					operation: "substitute",
+					char: destStr.charAt(y-1)
+				});
+				o.substitutionCount++;
+			}
+			x--;
+			y--;
+		}
+	}
+	
+	function cellVal(x, y){
+		if(x < 0 || x >= w || y < 0 || y >= h){
+			return null;
+		} else {
+			return matrix[y][x];
+		}
+	}
+	
+	return o;
+}
+
+/*
+Result
+
+    |From String Txt2
+----+------------
+Dest|              |
+Str |              |
+Txt1|              v
+    |              y
+	    --> x
+		
+===== GET OPERATIONS:
+
+From last cell (bottom-right) -> this cell
+
+Loop Util this cell is the top-left:
+( The coordinate of top-left cell is (0,0) )
+(operation delete, insert and substitute )
+(assume the index is fixed (not changing) for every character )
+0. coordinate of this cell is (x,y)
+1. Compare the nearby cell: left, upper left and upper cell
+                            x-1     x-1,y-1       y-1
+   - get the cell (as next cell) with the minimum value
+2. If cell = left, means delete char from From Str (at index x-1)
+3. Else If cell = up, means insert char from Dest Str (at index y-1)
+                            before the char (index x) at From Str
+4. Else, (cell = upper left),
+5. If this cell value = next cell value, not changing (char equal)
+6. Else substitute the char (index y-1) of Dest Str
+        and replace the char (index x-1) of From Str
+7. IfEND. set this cell to next cell, check and reloop
+
+*/
+
+</script>
+</body>
+</html>

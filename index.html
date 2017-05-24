@@ -21,6 +21,8 @@ Text 1 / dest String<br>
 Text 2 / From string<br>
 <textarea id="__text2" cols="50" rows="7"></textarea><br>
 <br>
+<label><input type="checkbox" id="__showmatrix"> Show Matrix</label><br>
+<br>
 Result
 <div id="__result"></div>
 <script>
@@ -73,7 +75,7 @@ __text1.oninput = __text2.oninput = function(e){
 	+ "insertion count:    " + d.insertionCount + "\n"
 	+ "deletion count:     " + d.deletionCount + "\n"
 	+ "substitution count: " + d.substitutionCount + "\n"
-	+ l.toString() + "</pre>"
+	+ (__showmatrix.checked ? l.toString() : "") + "</pre>"
 	
 	__result.innerHTML = innerHTML;
 	
@@ -149,14 +151,15 @@ function getDetailLevenshtein(fromStr, destStr){
 	var x = w-1;
 	var y = h-1;
 	
-	while(x != 0 && y != 0){
+	while(x != 0 || y != 0){
 		var leftVal = cellVal(x-1, y);
 		var upperLeftVal = cellVal(x-1, y-1);
 		var upperVal = cellVal(x, y-1);
 		var currentVal = cellVal(x, y);
 		
 		if(leftVal != null && leftVal < currentVal
-				&& leftVal <= upperLeftVal && leftVal <= upperVal){ //step 2, delete
+				&& (upperLeftVal == null || leftVal <= upperLeftVal)
+				&& (upperVal == null || leftVal <= upperVal)){ //step 2, delete
 			a.unshift({
 				index: x-1,
 				operation: "delete",
@@ -165,7 +168,8 @@ function getDetailLevenshtein(fromStr, destStr){
 			o.deletionCount++;
 			x--;
 		} else if (upperVal != null && upperVal < currentVal
-				&& upperVal <= upperLeftVal && upperVal <= leftVal){ //step 3, insert
+				&& (upperLeftVal == null || upperVal <= upperLeftVal)
+				&& (leftVal == null || upperVal <= leftVal)){ //step 3, insert
 			a.unshift({
 				index: x, //0 if beginning
 				operation: "insert",
